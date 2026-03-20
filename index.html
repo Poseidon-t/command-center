@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Command Center</title>
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --surface2: #1c2333; --border: #30363d;
+    --text: #e6edf3; --text-dim: #8b949e; --accent: #58a6ff; --green: #3fb950;
+    --amber: #d29922; --red: #f85149; --purple: #bc8cff;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; }
+  a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: underline; }
+  button { cursor: pointer; font-family: inherit; }
+
+  .shell { display: flex; min-height: 100vh; }
+
+  /* ── Sidebar ── */
+  .sidebar { width: 230px; background: var(--surface); border-right: 1px solid var(--border); position: fixed; top: 0; left: 0; bottom: 0; overflow-y: auto; display: flex; flex-direction: column; }
+  .main { margin-left: 230px; flex: 1; padding: 2rem; max-width: 960px; }
+
+  .logo { padding: 1.25rem; border-bottom: 1px solid var(--border); }
+  .logo h1 { font-size: 1rem; font-weight: 700; } .logo .sub { font-size: 0.6875rem; color: var(--text-dim); margin-top: 2px; }
+
+  .sidebar-box { margin: 0.75rem; padding: 0.75rem; background: var(--surface2); border-radius: 8px; border: 1px solid var(--border); }
+  .sidebar-box .lbl { font-size: 0.5625rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.07em; font-weight: 600; }
+  .sidebar-box .val { font-size: 1.25rem; font-weight: 700; color: var(--green); }
+  .progress-bar { height: 5px; background: var(--border); border-radius: 3px; margin-top: 0.4rem; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--green); border-radius: 3px; transition: width 0.3s; }
+  .progress-text { font-size: 0.6875rem; color: var(--text-dim); margin-top: 0.3rem; }
+
+  .nav-sep { padding: 0.6rem 1rem 0.3rem; font-size: 0.5625rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; }
+  .nav-item { display: flex; align-items: center; gap: 0.6rem; padding: 0.45rem 1.25rem; font-size: 0.8125rem; cursor: pointer; color: var(--text-dim); border-left: 2px solid transparent; transition: all 0.12s; user-select: none; }
+  .nav-item:hover { background: var(--surface2); color: var(--text); }
+  .nav-item.active { color: var(--text); background: rgba(88,166,255,0.08); border-left-color: var(--accent); }
+  .nav-item .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .nav-item .cnt { margin-left: auto; font-size: 0.625rem; background: var(--surface2); padding: 0.05rem 0.4rem; border-radius: 8px; }
+
+  /* ── Common ── */
+  .page-head { margin-bottom: 1.5rem; }
+  .page-head h2 { font-size: 1.375rem; font-weight: 700; letter-spacing: -0.02em; }
+  .page-head .sub { color: var(--text-dim); font-size: 0.8125rem; margin-top: 0.15rem; }
+  .badge { font-size: 0.5625rem; font-weight: 700; padding: 0.15rem 0.55rem; border-radius: 9999px; text-transform: uppercase; letter-spacing: 0.05em; vertical-align: middle; margin-left: 0.4rem; }
+  .badge-live { background: rgba(63,185,80,0.15); color: var(--green); }
+  .badge-on-hold { background: rgba(210,153,34,0.15); color: var(--amber); }
+  .badge-pre-launch { background: rgba(88,166,255,0.15); color: var(--accent); }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; margin-bottom: 1rem; }
+
+  /* ── Task items ── */
+  .task-item { display: flex; align-items: flex-start; gap: 0.6rem; padding: 0.5rem 0.6rem; border-radius: 6px; transition: background 0.1s; }
+  .task-item:hover { background: var(--surface2); }
+  .task-item:hover .task-del { opacity: 1; }
+  .task-item input[type="checkbox"] { appearance: none; -webkit-appearance: none; width: 18px; height: 18px; border: 2px solid var(--border); border-radius: 4px; flex-shrink: 0; cursor: pointer; position: relative; margin-top: 1px; transition: all 0.15s; }
+  .task-item input[type="checkbox"]:checked { background: var(--green); border-color: var(--green); }
+  .task-item input[type="checkbox"]:checked::after { content: ''; position: absolute; left: 4px; top: 1px; width: 6px; height: 10px; border: solid var(--bg); border-width: 0 2px 2px 0; transform: rotate(45deg); }
+  .task-item.done .task-text { text-decoration: line-through; color: var(--text-dim); opacity: 0.45; }
+  .task-text { font-size: 0.8125rem; line-height: 1.45; flex: 1; }
+  .task-tag { font-size: 0.5625rem; padding: 0.1rem 0.4rem; border-radius: 4px; white-space: nowrap; margin-left: 0.35rem; }
+  .tag-project { color: var(--accent); background: rgba(88,166,255,0.1); }
+  .tag-week { color: var(--purple); background: rgba(188,140,255,0.1); }
+  .task-del { opacity: 0; background: none; border: none; color: var(--text-dim); font-size: 0.75rem; padding: 0.2rem 0.35rem; border-radius: 4px; transition: all 0.12s; flex-shrink: 0; margin-top: 1px; }
+  .task-del:hover { color: var(--red); background: rgba(248,81,73,0.1); }
+
+  /* ── Add task ── */
+  .add-row { display: flex; gap: 0.4rem; margin-top: 0.6rem; }
+  .add-row input[type="text"] { flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem 0.75rem; color: var(--text); font-size: 0.8125rem; outline: none; }
+  .add-row input:focus { border-color: var(--accent); }
+  .add-row select { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem; color: var(--text); font-size: 0.75rem; outline: none; }
+  .add-row button { background: var(--accent); color: var(--bg); border: none; border-radius: 6px; padding: 0.5rem 1rem; font-size: 0.8125rem; font-weight: 600; }
+  .add-row button:hover { opacity: 0.85; }
+
+  /* ── Goals ── */
+  .goal-item { display: flex; align-items: flex-start; gap: 0.6rem; padding: 0.65rem; border-bottom: 1px solid var(--border); }
+  .goal-item:last-child { border-bottom: none; }
+  .goal-item:hover .task-del { opacity: 1; }
+  .goal-icon { font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
+  .goal-text { font-size: 0.875rem; font-weight: 500; flex: 1; }
+  .goal-sub { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.15rem; }
+
+  /* ── Stat grid ── */
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; margin-bottom: 1.5rem; }
+  .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 0.85rem 1rem; }
+  .stat .s-label { font-size: 0.625rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+  .stat .s-val { font-size: 1.4rem; font-weight: 700; margin-top: 0.1rem; }
+
+  /* ── Week plan ── */
+  .week-plan { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-bottom: 1.5rem; }
+  .week-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 0.85rem 1rem; cursor: pointer; transition: border-color 0.15s; }
+  .week-card:hover { border-color: var(--purple); }
+  .week-card .wk { font-size: 0.5625rem; color: var(--purple); text-transform: uppercase; font-weight: 700; letter-spacing: 0.06em; }
+  .week-card .wk-p { font-size: 0.875rem; font-weight: 600; margin-top: 0.2rem; }
+  .week-card .wk-g { font-size: 0.6875rem; color: var(--text-dim); margin-top: 0.2rem; }
+
+  /* ── Project page ── */
+  .proj-meta { display: flex; flex-wrap: wrap; gap: 0.4rem 1.25rem; font-size: 0.8125rem; color: var(--text-dim); margin-bottom: 1rem; }
+  .proj-meta .v { color: var(--text); font-family: 'SF Mono', Menlo, monospace; font-size: 0.75rem; }
+  .git-box { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem 1rem; font-family: 'SF Mono', Menlo, monospace; font-size: 0.6875rem; line-height: 1.8; margin-bottom: 1rem; }
+  .git-box .gl { color: var(--text-dim); } .git-box .gv { color: var(--text); }
+  .info-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem; }
+  .info-b { padding: 0.65rem 0.85rem; border-radius: 8px; font-size: 0.8125rem; }
+  .info-b.pri { background: rgba(88,166,255,0.08); border-left: 3px solid var(--accent); }
+  .info-b.pri strong { color: var(--accent); }
+  .info-b.blk { background: rgba(248,81,73,0.08); border-left: 3px solid var(--red); color: #ffa198; }
+  .info-b.blk strong { color: var(--red); }
+  .section-h { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.6rem; }
+  .section-h h3 { font-size: 0.875rem; font-weight: 600; }
+  .clear-btn { font-size: 0.625rem; color: var(--text-dim); cursor: pointer; background: none; border: 1px solid var(--border); padding: 0.15rem 0.5rem; border-radius: 4px; }
+  .clear-btn:hover { color: var(--red); border-color: var(--red); }
+
+  .empty { color: var(--text-dim); font-size: 0.8125rem; padding: 0.75rem 0; text-align: center; }
+
+  .footer { text-align: center; padding: 2.5rem 0 1rem; font-size: 0.625rem; color: var(--text-dim); }
+  .footer code { background: var(--surface2); padding: 0.15rem 0.4rem; border-radius: 4px; font-family: 'SF Mono', Menlo, monospace; }
+
+  /* ── Mobile ── */
+  .mobile-header { display: none; background: var(--surface); padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 10; }
+  .mobile-header h1 { font-size: 0.875rem; font-weight: 700; }
+  .hamburger { background: none; border: 1px solid var(--border); color: var(--text); padding: 0.3rem 0.5rem; border-radius: 4px; font-size: 0.875rem; }
+  .sidebar.open { transform: translateX(0); }
+  @media (max-width: 768px) {
+    .mobile-header { display: flex; align-items: center; justify-content: space-between; }
+    .sidebar { transform: translateX(-100%); transition: transform 0.2s; z-index: 20; }
+    .sidebar.open { transform: translateX(0); }
+    .main { margin-left: 0; padding: 1rem; }
+    .info-row, .week-plan { grid-template-columns: 1fr; }
+    .stat-grid { grid-template-columns: 1fr 1fr; }
+  }
+
+  /* ── Export banner ── */
+  .export-bar { display: flex; align-items: center; justify-content: space-between; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem 0.85rem; margin-bottom: 1.25rem; font-size: 0.6875rem; color: var(--text-dim); }
+  .export-bar button { background: none; border: 1px solid var(--border); color: var(--text-dim); padding: 0.25rem 0.6rem; border-radius: 4px; font-size: 0.625rem; cursor: pointer; }
+  .export-bar button:hover { color: var(--text); border-color: var(--text-dim); }
+</style>
+</head>
+<body>
+
+<div class="mobile-header">
+  <h1>Command Center</h1>
+  <button class="hamburger" onclick="document.getElementById('sidebar').classList.toggle('open')">☰</button>
+</div>
+
+<div class="shell">
+  <nav class="sidebar" id="sidebar"></nav>
+  <main class="main" id="main"></main>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+// DATA
+// ═══════════════════════════════════════════════════════════════════
+const PROJECTS = [
+  {
+    id: "myclinicdesk", name: "MyClinicDesk", tagline: "Patient Management SaaS",
+    url: "https://www.myclinicdesk.com", status: "live", revenue: 8000, revenueLabel: "₹8,000",
+    pricing: "₹499/mo · ₹4,999/yr", stack: "Next.js · PostgreSQL · Razorpay · Railway", color: "#3fb950",
+    git: { branch: "main", lastDate: "2026-03-18", lastMsg: "Complete frontend audit fixes: errors, accessibility, validation, theme, transitions", modified: 7, untracked: 22 },
+    priority: "Harden for SaaS launch",
+    blocker: "Tenant limits not enforced. Post-trial behavior unclear.",
+    defaultTasks: [
+      { id: "mcd-1", text: "Enforce tenant limits (maxPatients/maxUsers)", week: 1 },
+      { id: "mcd-2", text: "Enforce post-trial write blocking", week: 1 },
+      { id: "mcd-3", text: "Add rate limiting on registration endpoint", week: 1 },
+      { id: "mcd-4", text: "Commit pending files & deploy to Railway", week: 1 },
+      { id: "mcd-5", text: "Hand to Agen — product is ready to sell", week: 1 }
+    ]
+  },
+  {
+    id: "safestreets", name: "SafeStreets", tagline: "Walkability Analysis Platform",
+    url: "https://safestreets.streetsandcommons.com", status: "live", revenue: 0, revenueLabel: "₹0",
+    pricing: "Free · $49 Agent Reports · Enterprise", stack: "React 19 · Vite · Express · Railway", color: "#58a6ff",
+    git: { branch: "main", lastDate: "2026-03-15", lastMsg: "Unified score breakdown box with retro-themed metric cards", modified: 3, untracked: 6 },
+    priority: "Re-integrate Stripe for $49 Agent Reports",
+    blocker: "Payment gate removed. Agent Reports are free right now.",
+    defaultTasks: [
+      { id: "ss-1", text: "Wire Stripe checkout for Agent Reports ($49)", week: 2 },
+      { id: "ss-2", text: "Build 'first 3 free' counter + conversion flow", week: 2 },
+      { id: "ss-3", text: "Publish first blog post via admin", week: 2 },
+      { id: "ss-4", text: "Set up content rhythm — 2 posts/week", week: 2 },
+      { id: "ss-5", text: "Follow up on TCDC partnership", week: 2 }
+    ]
+  },
+  {
+    id: "cmguide", name: "Chiang Mai Guide", tagline: "City Experience Platform",
+    url: "Not deployed", status: "pre-launch", revenue: 0, revenueLabel: "₹0",
+    pricing: "$9.99 one-time premium", stack: "React 19 · Vite · Express · Stripe · Mapbox", color: "#bc8cff",
+    git: { branch: "main", lastDate: "2026-03-18", lastMsg: "Lanna editorial theme + Adventures + Hidden Gems + Thai scraping pipeline", modified: 28, untracked: 29 },
+    priority: "Deploy to production",
+    blocker: "Not deployed. Infrastructure + config blocking, not code.",
+    defaultTasks: [
+      { id: "cm-1", text: "Commit 28 pending files (Lanna theme)", week: 3 },
+      { id: "cm-2", text: "Set up Railway + PostgreSQL", week: 3 },
+      { id: "cm-3", text: "Configure env vars (Stripe, Mapbox, Anthropic)", week: 3 },
+      { id: "cm-4", text: "Deploy + get live URL", week: 3 },
+      { id: "cm-5", text: "Test payment flow end-to-end", week: 3 }
+    ]
+  },
+  {
+    id: "fujifilm", name: "Fujifilm Sales", tagline: "Sales Enablement Platform",
+    url: "https://fujifilm-sales-production.up.railway.app", status: "on-hold", revenue: 0, revenueLabel: "₹0",
+    pricing: "Potential paid contract", stack: "Next.js 16 · SQLite · Drizzle · Railway", color: "#d29922",
+    git: { branch: "main", lastDate: "2026-03-18", lastMsg: "Use Inter font across all themes", modified: 5, untracked: 0 },
+    priority: "Waiting for client feedback",
+    blocker: "Client decision pending — parked.",
+    defaultTasks: [
+      { id: "ff-1", text: "Wait for Santhosh's management response", week: 0 },
+      { id: "ff-2", text: "Deploy quiz/cert improvements when ready", week: 0 }
+    ]
+  }
+];
+
+const WEEKLY = [
+  { week: 1, project: "MyClinicDesk", goal: "Harden SaaS, deploy, hand to Agen to sell" },
+  { week: 2, project: "SafeStreets", goal: "Monetize with Stripe + start content engine" },
+  { week: 3, project: "Chiang Mai Guide", goal: "Deploy to production with live URL" }
+];
+
+// ═══════════════════════════════════════════════════════════════════
+// STATE — localStorage
+// ═══════════════════════════════════════════════════════════════════
+const SK = "cc_v2";
+let S;
+
+function load() { try { S = JSON.parse(localStorage.getItem(SK)) || {}; } catch { S = {}; } if (!S.done) S.done = {}; if (!S.tasks) S.tasks = {}; if (!S.goals) S.goals = []; if (!S.page) S.page = "overview"; }
+function save() { localStorage.setItem(SK, JSON.stringify(S)); }
+function isDone(id) { return !!S.done[id]; }
+
+function toggle(id) { S.done[id] = !S.done[id]; if (!S.done[id]) delete S.done[id]; save(); render(); }
+
+function addTask(projectId, text, week) {
+  if (!text.trim()) return;
+  if (!S.tasks[projectId]) S.tasks[projectId] = [];
+  S.tasks[projectId].push({ id: projectId + "-u" + Date.now(), text: text.trim(), week: week || 0 });
+  save(); render();
+}
+
+function deleteTask(projectId, taskId) {
+  if (!S.tasks[projectId]) return;
+  S.tasks[projectId] = S.tasks[projectId].filter(t => t.id !== taskId);
+  delete S.done[taskId];
+  save(); render();
+}
+
+function addGoal(text) {
+  if (!text.trim()) return;
+  S.goals.push({ id: "g-" + Date.now(), text: text.trim(), created: new Date().toISOString().slice(0, 10) });
+  save(); render();
+}
+
+function deleteGoal(id) {
+  S.goals = S.goals.filter(g => g.id !== id);
+  save(); render();
+}
+
+function clearDone(projectId) {
+  getAllTasks(projectId).forEach(t => { if (S.done[t.id]) delete S.done[t.id]; });
+  if (S.tasks[projectId]) S.tasks[projectId] = S.tasks[projectId].filter(t => !isDone(t.id));
+  save(); render();
+}
+
+function getAllTasks(pid) {
+  const p = PROJECTS.find(p => p.id === pid);
+  return [...(p ? p.defaultTasks : []), ...(S.tasks[pid] || [])];
+}
+
+function taskCount(pid) {
+  const all = getAllTasks(pid);
+  const d = all.filter(t => isDone(t.id)).length;
+  return { total: all.length, done: d, left: all.length - d };
+}
+
+function nav(page) { S.page = page; save(); render(); document.getElementById('sidebar').classList.remove('open'); }
+
+function exportState() {
+  const blob = new Blob([JSON.stringify(S, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'dashboard-state.json'; a.click();
+}
+
+function importState() {
+  const input = document.createElement('input'); input.type = 'file'; input.accept = '.json';
+  input.onchange = e => {
+    const f = e.target.files[0]; if (!f) return;
+    const r = new FileReader();
+    r.onload = () => { try { S = JSON.parse(r.result); save(); render(); } catch { alert('Invalid file'); } };
+    r.readAsText(f);
+  };
+  input.click();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════════════════════════
+function render() {
+  renderSidebar();
+  if (S.page === "overview") renderOverview();
+  else if (S.page === "goals") renderGoals();
+  else { const p = PROJECTS.find(p => p.id === S.page); if (p) renderProject(p); else renderOverview(); }
+}
+
+function renderSidebar() {
+  const totalD = PROJECTS.reduce((s, p) => s + taskCount(p.id).done, 0);
+  const totalA = PROJECTS.reduce((s, p) => s + taskCount(p.id).total, 0);
+  const pct = totalA ? Math.round(totalD / totalA * 100) : 0;
+  const rev = PROJECTS.reduce((s, p) => s + p.revenue, 0);
+  const dots = { live: "var(--green)", "on-hold": "var(--amber)", "pre-launch": "var(--accent)" };
+
+  document.getElementById("sidebar").innerHTML = `
+    <div class="logo"><h1>Command Center</h1><div class="sub">Sarath's Projects</div></div>
+    <div class="sidebar-box"><div class="lbl">Total Revenue</div><div class="val">₹${rev.toLocaleString("en-IN")}</div></div>
+    <div class="sidebar-box">
+      <div class="lbl">Progress</div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+      <div class="progress-text">${totalD}/${totalA} tasks (${pct}%)</div>
+    </div>
+    <div class="nav-sep">Pages</div>
+    <div class="nav-item ${S.page==='overview'?'active':''}" onclick="nav('overview')">◉ Overview</div>
+    <div class="nav-item ${S.page==='goals'?'active':''}" onclick="nav('goals')">◎ Goals</div>
+    <div class="nav-sep" style="margin-top:0.5rem">Projects</div>
+    ${PROJECTS.map(p => {
+      const c = taskCount(p.id);
+      return `<div class="nav-item ${S.page===p.id?'active':''}" onclick="nav('${p.id}')">
+        <span class="dot" style="background:${dots[p.status]}"></span>${p.name}<span class="cnt">${c.left}</span>
+      </div>`;
+    }).join("")}
+  `;
+}
+
+function renderTaskItem(t, projectId, projectName, projectColor, showProject) {
+  const done = isDone(t.id);
+  const isCustom = t.id.includes('-u');
+  return `<div class="task-item ${done?'done':''}">
+    <input type="checkbox" ${done?'checked':''} onclick="toggle('${t.id}')">
+    <span class="task-text">${t.text}${showProject && projectName ? `<span class="task-tag tag-project" style="color:${projectColor}">${projectName}</span>` : ''}${t.week ? `<span class="task-tag tag-week">W${t.week}</span>` : ''}</span>
+    ${isCustom ? `<button class="task-del" onclick="deleteTask('${projectId}','${t.id}')" title="Delete">✕</button>` : ''}
+  </div>`;
+}
+
+function renderOverview() {
+  const rev = PROJECTS.reduce((s, p) => s + p.revenue, 0);
+  const totalD = PROJECTS.reduce((s, p) => s + taskCount(p.id).done, 0);
+  const totalA = PROJECTS.reduce((s, p) => s + taskCount(p.id).total, 0);
+
+  const allTasks = PROJECTS.flatMap(p =>
+    getAllTasks(p.id).map(t => ({ ...t, pid: p.id, pname: p.name, pcolor: p.color }))
+  ).filter(t => !isDone(t.id)).sort((a, b) => (a.week || 99) - (b.week || 99));
+
+  document.getElementById("main").innerHTML = `
+    <div class="page-head"><h2>Overview</h2><div class="sub">${PROJECTS.length} projects · ${PROJECTS.filter(p=>p.status==='live').length} live</div></div>
+
+    <div class="export-bar">
+      <span>State saved in browser</span>
+      <span><button onclick="exportState()">Export JSON</button> <button onclick="importState()">Import</button></span>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat"><div class="s-label">Revenue</div><div class="s-val" style="color:var(--green)">₹${rev.toLocaleString("en-IN")}</div></div>
+      <div class="stat"><div class="s-label">Tasks Done</div><div class="s-val">${totalD}<span style="font-size:0.75rem;color:var(--text-dim)">/${totalA}</span></div></div>
+      <div class="stat"><div class="s-label">Remaining</div><div class="s-val" style="color:var(--amber)">${totalA - totalD}</div></div>
+      <div class="stat"><div class="s-label">Goals</div><div class="s-val">${S.goals.length}</div></div>
+    </div>
+
+    <h3 style="font-size:0.875rem;font-weight:600;margin-bottom:0.6rem">3-Week Plan</h3>
+    <div class="week-plan">
+      ${WEEKLY.map(w => {
+        const pid = PROJECTS.find(p => p.name === w.project)?.id;
+        return `<div class="week-card" onclick="nav('${pid}')"><div class="wk">Week ${w.week}</div><div class="wk-p">${w.project}</div><div class="wk-g">${w.goal}</div></div>`;
+      }).join("")}
+    </div>
+
+    <div class="section-h"><h3>Up Next (${allTasks.length} tasks)</h3></div>
+    ${allTasks.length === 0 ? '<div class="empty">All tasks done!</div>' :
+      allTasks.slice(0, 15).map(t => renderTaskItem(t, t.pid, t.pname, t.pcolor, true)).join("")}
+    ${allTasks.length > 15 ? `<div style="font-size:0.75rem;color:var(--text-dim);padding:0.5rem 0.6rem">+ ${allTasks.length - 15} more</div>` : ''}
+
+    <div class="add-row" style="margin-top:1rem">
+      <input type="text" id="overviewTask" placeholder="Quick add task..." onkeydown="if(event.key==='Enter')addFromOverview()">
+      <select id="overviewProject">${PROJECTS.map(p => `<option value="${p.id}">${p.name}</option>`).join("")}</select>
+      <button onclick="addFromOverview()">Add</button>
+    </div>
+
+    ${S.goals.length > 0 ? `
+      <div style="margin-top:1.5rem">
+        <div class="section-h"><h3>Goals</h3></div>
+        ${S.goals.slice(0, 5).map(g => `
+          <div class="goal-item"><span class="goal-icon">◆</span><div style="flex:1"><div class="goal-text">${g.text}</div><div class="goal-sub">${g.created}</div></div>
+          <button class="task-del" onclick="deleteGoal('${g.id}')" title="Delete">✕</button></div>
+        `).join("")}
+      </div>
+    ` : ''}
+
+    <div class="footer">Run <code>cd ~/dashboard && ./generate.sh</code> to refresh git data</div>
+  `;
+}
+
+function addFromOverview() {
+  const input = document.getElementById('overviewTask');
+  const select = document.getElementById('overviewProject');
+  addTask(select.value, input.value, 0);
+}
+
+function renderGoals() {
+  document.getElementById("main").innerHTML = `
+    <div class="page-head"><h2>Goals</h2><div class="sub">What you're working towards</div></div>
+
+    <div class="card">
+      ${S.goals.length === 0 ? '<div class="empty">No goals yet. Add one below.</div>' :
+        S.goals.map(g => `
+          <div class="goal-item">
+            <span class="goal-icon">◆</span>
+            <div style="flex:1"><div class="goal-text">${g.text}</div><div class="goal-sub">Added ${g.created}</div></div>
+            <button class="task-del" style="opacity:1" onclick="deleteGoal('${g.id}')" title="Delete">✕</button>
+          </div>
+        `).join("")}
+      <div class="add-row" style="margin-top:0.75rem;border-top:1px solid var(--border);padding-top:0.75rem">
+        <input type="text" id="goalInput" placeholder="Add a goal... (e.g. ₹1L monthly revenue by June)" onkeydown="if(event.key==='Enter')addGoalFromInput()">
+        <button onclick="addGoalFromInput()">Add</button>
+      </div>
+    </div>
+
+    <div style="margin-top:1.5rem">
+      <div class="section-h"><h3>All Tasks by Project</h3></div>
+      ${PROJECTS.map(p => {
+        const tasks = getAllTasks(p.id);
+        const c = taskCount(p.id);
+        return `<div class="card" style="border-left:3px solid ${p.color}">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem">
+            <h3 style="font-size:0.875rem;cursor:pointer" onclick="nav('${p.id}')">${p.name} <span style="font-size:0.6875rem;color:var(--text-dim)">${c.done}/${c.total}</span></h3>
+          </div>
+          ${tasks.map(t => renderTaskItem(t, p.id, null, null, false)).join("")}
+          <div class="add-row">
+            <input type="text" id="goal-add-${p.id}" placeholder="Add task to ${p.name}..." onkeydown="if(event.key==='Enter')addTaskFromGoal('${p.id}')">
+            <button onclick="addTaskFromGoal('${p.id}')">Add</button>
+          </div>
+        </div>`;
+      }).join("")}
+    </div>
+  `;
+}
+
+function addGoalFromInput() { const i = document.getElementById('goalInput'); addGoal(i.value); }
+function addTaskFromGoal(pid) { const i = document.getElementById('goal-add-' + pid); addTask(pid, i.value, 0); }
+
+function renderProject(p) {
+  const badges = { live: "badge-live", "on-hold": "badge-on-hold", "pre-launch": "badge-pre-launch" };
+  const tasks = getAllTasks(p.id);
+  const c = taskCount(p.id);
+  const urlHtml = p.url === "Not deployed" ? `<span style="color:var(--text-dim)">Not deployed</span>` : `<a href="${p.url}" target="_blank">${p.url}</a>`;
+
+  document.getElementById("main").innerHTML = `
+    <div class="page-head">
+      <h2>${p.name}<span class="badge ${badges[p.status]}">${p.status}</span></h2>
+      <div class="sub">${p.tagline} · ${urlHtml}</div>
+    </div>
+
+    <div class="proj-meta">
+      <span>Stack: <span class="v">${p.stack}</span></span>
+      <span>Pricing: <span class="v">${p.pricing}</span></span>
+      <span>Revenue: <span class="v" style="color:var(--green)">${p.revenueLabel}</span></span>
+    </div>
+
+    <div class="git-box">
+      <span class="gl">branch:</span> <span class="gv">${p.git.branch}</span> ·
+      <span class="gl">last:</span> <span class="gv">${p.git.lastDate}</span> ·
+      <span class="gl">modified:</span> <span class="gv" ${p.git.modified>5?'style="color:var(--amber)"':''}>${p.git.modified}</span> ·
+      <span class="gl">untracked:</span> <span class="gv" ${p.git.untracked>10?'style="color:var(--amber)"':''}>${p.git.untracked}</span>
+      <br><span class="gl">msg:</span> <span class="gv">${p.git.lastMsg}</span>
+    </div>
+
+    <div class="info-row">
+      <div class="info-b pri"><strong>Priority:</strong> ${p.priority}</div>
+      <div class="info-b blk"><strong>Blocker:</strong> ${p.blocker}</div>
+    </div>
+
+    <div class="section-h">
+      <h3>Tasks (${c.done}/${c.total})</h3>
+      ${c.done > 0 ? `<button class="clear-btn" onclick="clearDone('${p.id}')">Clear done</button>` : ''}
+    </div>
+    ${tasks.map(t => renderTaskItem(t, p.id, null, null, false)).join("")}
+    <div class="add-row">
+      <input type="text" id="projTask" placeholder="Add a task..." onkeydown="if(event.key==='Enter')addTaskFromProject('${p.id}')">
+      <button onclick="addTaskFromProject('${p.id}')">Add</button>
+    </div>
+
+    <div class="footer">Checkboxes saved in browser · Custom tasks can be deleted with ✕</div>
+  `;
+}
+
+function addTaskFromProject(pid) { const i = document.getElementById('projTask'); addTask(pid, i.value, 0); }
+
+// ═══════════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════════
+load();
+render();
+</script>
+</body>
+</html>

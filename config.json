@@ -1,0 +1,85 @@
+{
+  "projects": [
+    {
+      "name": "SafeStreets",
+      "repo": "/Users/sarath/Documents/Streets-Commons",
+      "url": "https://safestreets.streetsandcommons.com",
+      "railway": "https://railway.app",
+      "status": "live",
+      "revenue": "₹0",
+      "priority": "Re-integrate Stripe for $49 Agent Reports",
+      "next": [
+        "Wire Stripe checkout for Agent Reports",
+        "Build 'first 3 free' counter + conversion flow",
+        "Publish 2 blog posts/week via admin content queue",
+        "Follow up on TCDC partnership"
+      ],
+      "blockers": "No payment gate — Agent Reports are free right now"
+    },
+    {
+      "name": "MyClinicDesk",
+      "repo": "/Users/sarath/clinicflow",
+      "url": "https://www.myclinicdesk.com",
+      "railway": "https://railway.app",
+      "status": "live",
+      "revenue": "₹8,000",
+      "priority": "Harden for SaaS launch",
+      "next": [
+        "Enforce tenant limits (maxPatients/maxUsers)",
+        "Enforce post-trial write blocking",
+        "Add rate limiting on registration",
+        "Commit pending files and deploy",
+        "Hand to Agen for distribution"
+      ],
+      "blockers": "Tenant limits not enforced, post-trial behavior unclear"
+    },
+    {
+      "name": "Fujifilm Sales",
+      "repo": "/Users/sarath/Documents/fujifilm-sales",
+      "url": "https://fujifilm-sales-production.up.railway.app",
+      "railway": "https://railway.app",
+      "status": "on-hold",
+      "revenue": "₹0",
+      "priority": "Waiting for client feedback",
+      "next": [
+        "Wait for Santhosh's management response",
+        "Deploy uncommitted quiz/cert improvements when ready"
+      ],
+      "blockers": "Client decision pending — do not work on this"
+    },
+    {
+      "name": "Chiang Mai Guide",
+      "repo": "/Users/sarath/Documents/chiangmai-experience",
+      "url": "Not deployed",
+      "railway": "https://railway.app",
+      "status": "pre-launch",
+      "revenue": "₹0",
+      "priority": "Deploy to production",
+      "next": [
+        "Commit 28 pending files",
+        "Set up Railway + PostgreSQL",
+        "Configure env vars (Stripe, Mapbox, Anthropic)",
+        "Get live URL + domain",
+        "Test payment flow end-to-end"
+      ],
+      "blockers": "Not deployed — infrastructure + config, not code"
+    }
+  ],
+  "other_tasks": [
+    {
+      "name": "Personal Website",
+      "priority": "low",
+      "note": "Simple site showcasing 4 products. Do in a gap day."
+    },
+    {
+      "name": "Business Registration",
+      "priority": "low",
+      "note": "Research sole prop vs LLP for invoicing enterprises"
+    }
+  ],
+  "weekly_focus": {
+    "week1": "MyClinicDesk — harden and hand off",
+    "week2": "SafeStreets — monetization + content",
+    "week3": "Chiang Mai Guide — deploy and launch"
+  }
+}
