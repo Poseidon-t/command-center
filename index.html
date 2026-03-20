@@ -173,6 +173,8 @@
   .collapse-header h3 { font-size: 0.875rem; font-weight: 600; }
   .collapse-arrow { font-size: 0.625rem; color: var(--text-dim); transition: transform 0.15s; }
   .collapse-arrow.open { transform: rotate(90deg); }
+  input[type="number"] { -moz-appearance: textfield; }
+  input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
 </style>
 </head>
 <body>
@@ -292,7 +294,15 @@ const WEEKLY = [
 const SK = "cc_v2";
 let S;
 
-function load() { try { S = JSON.parse(localStorage.getItem(SK)) || {}; } catch { S = {}; } if (!S.done) S.done = {}; if (!S.tasks) S.tasks = {}; if (!S.goals) S.goals = []; if (!S.logs) S.logs = {}; if (!S.page) S.page = "overview"; if (!S.projectTab) S.projectTab = {}; }
+function load() { try { S = JSON.parse(localStorage.getItem(SK)) || {}; } catch { S = {}; } if (!S.done) S.done = {}; if (!S.tasks) S.tasks = {}; if (!S.goals) S.goals = []; if (!S.logs) S.logs = {}; if (!S.revenue) S.revenue = {}; if (!S.page) S.page = "overview"; if (!S.projectTab) S.projectTab = {}; }
+
+// Seed initial revenue if empty
+function seedRevenue() {
+  if (!S.revenue.myclinicdesk || S.revenue.myclinicdesk.length === 0) {
+    S.revenue.myclinicdesk = [{ id: "r-seed", amount: 8000, note: "Initial tool for Agen", date: "2026-03-15", currency: "INR" }];
+    save();
+  }
+}
 function save() { localStorage.setItem(SK, JSON.stringify(S)); }
 function isDone(id) { return !!S.done[id]; }
 
@@ -334,6 +344,32 @@ function deleteLog(projectId, logId) {
   if (!S.logs[projectId]) return;
   S.logs[projectId] = S.logs[projectId].filter(l => l.id !== logId);
   save(); render();
+}
+
+function addRevenue(projectId, amount, note, currency) {
+  if (!amount || isNaN(amount)) return;
+  if (!S.revenue[projectId]) S.revenue[projectId] = [];
+  S.revenue[projectId].push({ id: "r-" + Date.now(), amount: parseFloat(amount), note: (note || "").trim(), date: new Date().toISOString().slice(0, 10), currency: currency || "INR" });
+  save(); render();
+}
+
+function deleteRevenue(projectId, revId) {
+  if (!S.revenue[projectId]) return;
+  S.revenue[projectId] = S.revenue[projectId].filter(r => r.id !== revId);
+  save(); render();
+}
+
+function getProjectRevenue(pid) {
+  return (S.revenue[pid] || []).reduce((s, r) => s + r.amount, 0);
+}
+
+function getTotalRevenue() {
+  return Object.values(S.revenue).flat().reduce((s, r) => s + r.amount, 0);
+}
+
+function formatCurrency(amount, currency) {
+  if (currency === "USD") return "$" + amount.toLocaleString("en-US");
+  return "₹" + amount.toLocaleString("en-IN");
 }
 
 function setProjectTab(projectId, tab) {
@@ -383,6 +419,7 @@ function render() {
   renderSidebar();
   if (S.page === "overview") renderOverview();
   else if (S.page === "goals") renderGoals();
+  else if (S.page === "revenue") renderRevenue();
   else { const p = PROJECTS.find(p => p.id === S.page); if (p) renderProject(p); else renderOverview(); }
 }
 
@@ -390,12 +427,12 @@ function renderSidebar() {
   const totalD = PROJECTS.reduce((s, p) => s + taskCount(p.id).done, 0);
   const totalA = PROJECTS.reduce((s, p) => s + taskCount(p.id).total, 0);
   const pct = totalA ? Math.round(totalD / totalA * 100) : 0;
-  const rev = PROJECTS.reduce((s, p) => s + p.revenue, 0);
+  const rev = getTotalRevenue();
   const dots = { live: "var(--green)", "on-hold": "var(--amber)", "pre-launch": "var(--accent)" };
 
   document.getElementById("sidebar").innerHTML = `
     <div class="logo"><h1>Command Center</h1><div class="sub">Sarath's Projects</div></div>
-    <div class="sidebar-box"><div class="lbl">Total Revenue</div><div class="val">₹${rev.toLocaleString("en-IN")}</div></div>
+    <div class="sidebar-box" style="cursor:pointer" onclick="nav('revenue')"><div class="lbl">Total Revenue</div><div class="val">₹${rev.toLocaleString("en-IN")}</div></div>
     <div class="sidebar-box">
       <div class="lbl">Progress</div>
       <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
@@ -404,6 +441,7 @@ function renderSidebar() {
     <div class="nav-sep">Pages</div>
     <div class="nav-item ${S.page==='overview'?'active':''}" onclick="nav('overview')">◉ Overview</div>
     <div class="nav-item ${S.page==='goals'?'active':''}" onclick="nav('goals')">◎ Goals</div>
+    <div class="nav-item ${S.page==='revenue'?'active':''}" onclick="nav('revenue')">◈ Revenue</div>
     <div class="nav-sep" style="margin-top:0.5rem">Projects</div>
     ${PROJECTS.map(p => {
       const c = taskCount(p.id);
@@ -425,7 +463,7 @@ function renderTaskItem(t, projectId, projectName, projectColor, showProject) {
 }
 
 function renderOverview() {
-  const rev = PROJECTS.reduce((s, p) => s + p.revenue, 0);
+  const rev = getTotalRevenue();
   const totalD = PROJECTS.reduce((s, p) => s + taskCount(p.id).done, 0);
   const totalA = PROJECTS.reduce((s, p) => s + taskCount(p.id).total, 0);
 
@@ -485,6 +523,102 @@ function addFromOverview() {
   const input = document.getElementById('overviewTask');
   const select = document.getElementById('overviewProject');
   addTask(select.value, input.value, 0);
+}
+
+function renderRevenue() {
+  const total = getTotalRevenue();
+  const allEntries = PROJECTS.flatMap(p =>
+    (S.revenue[p.id] || []).map(r => ({ ...r, project: p.name, projectId: p.id, color: p.color }))
+  ).sort((a, b) => b.date.localeCompare(a.date));
+
+  // Monthly breakdown
+  const monthly = {};
+  allEntries.forEach(r => {
+    const month = r.date.slice(0, 7);
+    monthly[month] = (monthly[month] || 0) + r.amount;
+  });
+
+  document.getElementById("main").innerHTML = `
+    <div class="page-head"><h2>Revenue</h2><div class="sub">Track every rupee and dollar</div></div>
+
+    <div class="stat-grid">
+      <div class="stat"><div class="s-label">Total Revenue</div><div class="s-val" style="color:var(--green)">₹${total.toLocaleString("en-IN")}</div></div>
+      ${PROJECTS.map(p => {
+        const pr = getProjectRevenue(p.id);
+        return pr > 0 ? `<div class="stat"><div class="s-label">${p.name}</div><div class="s-val" style="color:${p.color};font-size:1.1rem">₹${pr.toLocaleString("en-IN")}</div></div>` : '';
+      }).join("")}
+    </div>
+
+    <div class="card">
+      <h3 style="font-size:0.875rem;font-weight:600;margin-bottom:0.75rem">Add Revenue</h3>
+      <div class="add-row" style="margin-top:0">
+        <input type="number" id="revAmount" placeholder="Amount" style="max-width:120px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:0.5rem;color:var(--text);font-size:0.8125rem;outline:none">
+        <select id="revCurrency" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:0.5rem;color:var(--text);font-size:0.75rem;outline:none">
+          <option value="INR">₹ INR</option>
+          <option value="USD">$ USD</option>
+        </select>
+        <select id="revProject" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:0.5rem;color:var(--text);font-size:0.75rem;outline:none">
+          ${PROJECTS.map(p => `<option value="${p.id}">${p.name}</option>`).join("")}
+        </select>
+        <input type="text" id="revNote" placeholder="Note (e.g. First clinic subscription)" style="flex:1" onkeydown="if(event.key==='Enter')addRevenueFromPage()">
+        <button onclick="addRevenueFromPage()">Add</button>
+      </div>
+    </div>
+
+    ${Object.keys(monthly).length > 0 ? `
+      <div style="margin-top:1.25rem">
+        <h3 style="font-size:0.875rem;font-weight:600;margin-bottom:0.5rem">Monthly Breakdown</h3>
+        ${Object.entries(monthly).sort((a,b) => b[0].localeCompare(a[0])).map(([month, amt]) => `
+          <div style="display:flex;align-items:center;gap:0.75rem;padding:0.5rem 0;border-bottom:1px solid var(--border)">
+            <span style="font-size:0.8125rem;font-family:'SF Mono',Menlo,monospace;color:var(--text-dim);min-width:70px">${month}</span>
+            <div style="flex:1;height:8px;background:var(--border);border-radius:4px;overflow:hidden">
+              <div style="height:100%;background:var(--green);border-radius:4px;width:${Math.min(100, (amt/total)*100)}%"></div>
+            </div>
+            <span style="font-size:0.875rem;font-weight:600;color:var(--green);min-width:80px;text-align:right">₹${amt.toLocaleString("en-IN")}</span>
+          </div>
+        `).join("")}
+      </div>
+    ` : ''}
+
+    <div style="margin-top:1.25rem">
+      <h3 style="font-size:0.875rem;font-weight:600;margin-bottom:0.5rem">All Entries</h3>
+      ${allEntries.length === 0 ? '<div class="empty">No revenue recorded yet.</div>' :
+        allEntries.map(r => `
+          <div class="log-item">
+            <span class="log-date">${r.date}</span>
+            <span class="log-text" style="flex:1">
+              <strong style="color:var(--green)">${formatCurrency(r.amount, r.currency)}</strong>
+              ${r.note ? ` — ${r.note}` : ''}
+              <span class="task-tag tag-project" style="color:${r.color}">${r.project}</span>
+            </span>
+            <button class="task-del" onclick="deleteRevenue('${r.projectId}','${r.id}')" title="Delete">✕</button>
+          </div>
+        `).join("")}
+    </div>
+
+    <div style="margin-top:1.5rem">
+      <h3 style="font-size:0.875rem;font-weight:600;margin-bottom:0.5rem">Revenue by Project</h3>
+      ${PROJECTS.map(p => {
+        const entries = S.revenue[p.id] || [];
+        const pr = getProjectRevenue(p.id);
+        return `<div class="card" style="border-left:3px solid ${p.color};padding:0.85rem 1rem">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:0.875rem;font-weight:600;cursor:pointer" onclick="nav('${p.id}')">${p.name}</span>
+            <span style="font-size:1rem;font-weight:700;color:${pr > 0 ? 'var(--green)' : 'var(--text-dim)'}">₹${pr.toLocaleString("en-IN")}</span>
+          </div>
+          <div style="font-size:0.6875rem;color:var(--text-dim);margin-top:0.15rem">${entries.length} entries · ${p.pricing}</div>
+        </div>`;
+      }).join("")}
+    </div>
+  `;
+}
+
+function addRevenueFromPage() {
+  const amt = document.getElementById('revAmount');
+  const cur = document.getElementById('revCurrency');
+  const proj = document.getElementById('revProject');
+  const note = document.getElementById('revNote');
+  addRevenue(proj.value, amt.value, note.value, cur.value);
 }
 
 function renderGoals() {
@@ -571,6 +705,7 @@ function renderProject(p) {
       <div class="tab ${activeTab==='tasks'?'active':''}" onclick="setProjectTab('${p.id}','tasks')">Tasks (${c.left})</div>
       <div class="tab ${activeTab==='features'?'active':''}" onclick="setProjectTab('${p.id}','features')">Features</div>
       <div class="tab ${activeTab==='log'?'active':''}" onclick="setProjectTab('${p.id}','log')">Activity Log (${logs.length})</div>
+      <div class="tab ${activeTab==='revenue'?'active':''}" onclick="setProjectTab('${p.id}','revenue')">Revenue (₹${getProjectRevenue(p.id).toLocaleString("en-IN")})</div>
       <div class="tab ${activeTab==='git'?'active':''}" onclick="setProjectTab('${p.id}','git')">Git</div>
     </div>
 
@@ -622,6 +757,27 @@ function renderProject(p) {
       </div>
     </div>
 
+    <!-- REVENUE TAB -->
+    <div class="tab-panel ${activeTab==='revenue'?'active':''}">
+      <h3 style="font-size:0.875rem;font-weight:600;margin-bottom:0.5rem">Revenue — ₹${getProjectRevenue(p.id).toLocaleString("en-IN")} total</h3>
+      <div class="add-row" style="margin-top:0;margin-bottom:1rem">
+        <input type="number" id="projRevAmt" placeholder="Amount" style="max-width:100px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:0.5rem;color:var(--text);font-size:0.8125rem;outline:none">
+        <select id="projRevCur" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:0.5rem;color:var(--text);font-size:0.75rem;outline:none">
+          <option value="INR">₹ INR</option><option value="USD">$ USD</option>
+        </select>
+        <input type="text" id="projRevNote" placeholder="Note..." style="flex:1" onkeydown="if(event.key==='Enter')addRevFromProj('${p.id}')">
+        <button onclick="addRevFromProj('${p.id}')">Add</button>
+      </div>
+      ${(S.revenue[p.id] || []).length === 0 ? '<div class="empty">No revenue yet for this project.</div>' :
+        [...(S.revenue[p.id] || [])].reverse().map(r => `
+          <div class="log-item">
+            <span class="log-date">${r.date}</span>
+            <span class="log-text"><strong style="color:var(--green)">${formatCurrency(r.amount, r.currency)}</strong>${r.note ? ` — ${r.note}` : ''}</span>
+            <button class="task-del" onclick="deleteRevenue('${p.id}','${r.id}')" title="Delete">✕</button>
+          </div>
+        `).join("")}
+    </div>
+
     <!-- GIT TAB -->
     <div class="tab-panel ${activeTab==='git'?'active':''}">
       <div class="git-box" style="margin-bottom:1rem">
@@ -646,15 +802,23 @@ function addLogFromProject(pid) {
   addLog(pid, text.value, type.value);
 }
 
+function addRevFromProj(pid) {
+  const amt = document.getElementById('projRevAmt');
+  const cur = document.getElementById('projRevCur');
+  const note = document.getElementById('projRevNote');
+  addRevenue(pid, amt.value, note.value, cur.value);
+}
+
 function addTaskFromProject(pid) { const i = document.getElementById('projTask'); addTask(pid, i.value, 0); }
 
 // ═══════════════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════════════
 load();
+seedRevenue();
 render();
 </script>
-<script>/* AUTO-GENERATED by generate.sh — 2026-03-20 21:49 */
+<script>/* AUTO-GENERATED by generate.sh — 2026-03-20 21:52 */
 (function(){
 var p=PROJECTS.find(function(p){return p.id==='myclinicdesk'});
 if(p){p.git.branch='main';p.git.lastDate='2026-03-18';p.git.lastMsg='Complete frontend audit fixes: errors, accessibility, validation, theme, transit';p.git.modified=7;p.git.untracked=22;p.git.commits=[{hash:'30eb356',date:'2026-03-18',msg:'Complete frontend audit fixes: errors, accessibility, validation, them'},{hash:'5ff73b3',date:'2026-03-18',msg:'Fix WhatsApp phone formatting, add signature file upload'},{hash:'a2aa5ad',date:'2026-03-18',msg:'Add WhatsApp icon next to patient phones, signature file upload'},{hash:'c1beae4',date:'2026-03-16',msg:'Fix E2E tests: rate limiting, API response shapes, shared page context'},{hash:'49bf5db',date:'2026-03-16',msg:'Add authenticated E2E tests for doctor, admin, and patient journeys'},{hash:'a2e279c',date:'2026-03-16',msg:'Fix E2E tests and add /pricing redirect route'},{hash:'9b1ad15',date:'2026-03-16',msg:'Add complete testing workflow: unit tests (Vitest) + E2E tests (Playwr'},{hash:'7a08b0a',date:'2026-03-16',msg:'Security audit fixes and full theme token migration'},{hash:'190da60',date:'2026-03-16',msg:'Fix registration link auth, rename to MyClinicDesk, admin improvements'},{hash:'d4d4f60',date:'2026-03-16',msg:'Apply earthy olive </body> cream theme across app'},];}
