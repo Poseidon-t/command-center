@@ -175,6 +175,33 @@
   .collapse-arrow.open { transform: rotate(90deg); }
   input[type="number"] { -moz-appearance: textfield; }
   input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
+
+  /* ── Resources ── */
+  .res-item { display: flex; align-items: flex-start; gap: 0.6rem; padding: 0.65rem 0.75rem; border-bottom: 1px solid var(--border); transition: background 0.1s; }
+  .res-item:last-of-type { border-bottom: none; }
+  .res-item:hover { background: var(--surface2); }
+  .res-item:hover .task-del { opacity: 1; }
+  .res-icon { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; flex-shrink: 0; margin-top: 1px; }
+  .res-icon.link { background: rgba(88,166,255,0.12); color: var(--accent); }
+  .res-icon.credential { background: rgba(248,81,73,0.12); color: var(--red); }
+  .res-icon.api-key { background: rgba(210,153,34,0.12); color: var(--amber); }
+  .res-icon.config { background: rgba(188,140,255,0.12); color: var(--purple); }
+  .res-icon.doc { background: rgba(63,185,80,0.12); color: var(--green); }
+  .res-body { flex: 1; min-width: 0; }
+  .res-name { font-size: 0.8125rem; font-weight: 600; }
+  .res-val { font-size: 0.75rem; font-family: 'SF Mono', Menlo, monospace; color: var(--text-dim); margin-top: 0.15rem; word-break: break-all; }
+  .res-val a { color: var(--accent); }
+  .res-note { font-size: 0.6875rem; color: var(--text-dim); margin-top: 0.15rem; }
+  .res-mask { cursor: pointer; user-select: none; }
+  .res-mask:hover { color: var(--text); }
+  .res-type-badge { font-size: 0.5625rem; padding: 0.1rem 0.4rem; border-radius: 4px; font-weight: 600; margin-left: 0.4rem; }
+  .res-copy { background: none; border: 1px solid var(--border); color: var(--text-dim); font-size: 0.6rem; padding: 0.15rem 0.4rem; border-radius: 4px; cursor: pointer; flex-shrink: 0; margin-top: 2px; }
+  .res-copy:hover { color: var(--text); border-color: var(--text-dim); }
+  .res-filter { display: flex; gap: 0.3rem; margin-bottom: 0.75rem; flex-wrap: wrap; }
+  .res-filter-btn { font-size: 0.6875rem; padding: 0.25rem 0.6rem; border-radius: 9999px; border: 1px solid var(--border); background: none; color: var(--text-dim); cursor: pointer; }
+  .res-filter-btn:hover, .res-filter-btn.active { color: var(--text); border-color: var(--accent); background: rgba(88,166,255,0.08); }
+  .res-search { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem 0.7rem; color: var(--text); font-size: 0.75rem; outline: none; width: 100%; margin-bottom: 0.5rem; }
+  .res-search:focus { border-color: var(--accent); }
 </style>
 </head>
 <body>
@@ -273,7 +300,7 @@ const WEEKLY = [
 const SK = "cc_v2";
 let S;
 
-function load() { try { S = JSON.parse(localStorage.getItem(SK)) || {}; } catch { S = {}; } if (!S.done) S.done = {}; if (!S.tasks) S.tasks = {}; if (!S.goals) S.goals = []; if (!S.logs) S.logs = {}; if (!S.revenue) S.revenue = {}; if (!S.page) S.page = "overview"; if (!S.projectTab) S.projectTab = {}; }
+function load() { try { S = JSON.parse(localStorage.getItem(SK)) || {}; } catch { S = {}; } if (!S.done) S.done = {}; if (!S.tasks) S.tasks = {}; if (!S.goals) S.goals = []; if (!S.logs) S.logs = {}; if (!S.revenue) S.revenue = {}; if (!S.resources) S.resources = {}; if (!S.page) S.page = "overview"; if (!S.projectTab) S.projectTab = {}; if (!S.resFilter) S.resFilter = {}; if (!S.resRevealed) S.resRevealed = {}; }
 
 // Seed initial revenue if empty
 function seedRevenue() {
@@ -336,6 +363,67 @@ function deleteRevenue(projectId, revId) {
   if (!S.revenue[projectId]) return;
   S.revenue[projectId] = S.revenue[projectId].filter(r => r.id !== revId);
   save(); render();
+}
+
+// ── Resources ──
+const RES_TYPES = ['link', 'credential', 'api-key', 'config', 'doc'];
+const RES_ICONS = { link: '🔗', credential: '🔐', 'api-key': '🔑', config: '⚙', doc: '📄' };
+const RES_SENSITIVE = { credential: true, 'api-key': true };
+
+function addResource(projectId, name, type, value, notes) {
+  if (!name.trim() || !value.trim()) return;
+  if (!S.resources[projectId]) S.resources[projectId] = [];
+  S.resources[projectId].push({
+    id: 'res-' + Date.now(),
+    name: name.trim(),
+    type: type || 'doc',
+    value: value.trim(),
+    notes: (notes || '').trim(),
+    created: new Date().toISOString().slice(0, 10)
+  });
+  save(); render();
+}
+
+function deleteResource(projectId, resId) {
+  if (!S.resources[projectId]) return;
+  S.resources[projectId] = S.resources[projectId].filter(r => r.id !== resId);
+  delete S.resRevealed[resId];
+  save(); render();
+}
+
+function toggleReveal(resId) {
+  S.resRevealed[resId] = !S.resRevealed[resId];
+  save(); render();
+}
+
+function copyResource(resId, projectId) {
+  const res = (S.resources[projectId] || []).find(r => r.id === resId);
+  if (res) {
+    navigator.clipboard.writeText(res.value).then(() => {
+      const btn = document.getElementById('copy-' + resId);
+      if (btn) { btn.textContent = 'Copied!'; setTimeout(() => { btn.textContent = 'Copy'; }, 1500); }
+    });
+  }
+}
+
+function setResFilter(projectId, type) {
+  S.resFilter[projectId] = S.resFilter[projectId] === type ? '' : type;
+  save(); render();
+}
+
+function getProjectResources(pid, filter, search) {
+  let res = S.resources[pid] || [];
+  if (filter) res = res.filter(r => r.type === filter);
+  if (search) {
+    const q = search.toLowerCase();
+    res = res.filter(r => r.name.toLowerCase().includes(q) || r.value.toLowerCase().includes(q) || (r.notes && r.notes.toLowerCase().includes(q)));
+  }
+  return res;
+}
+
+function maskValue(val) {
+  if (val.length <= 8) return '••••••••';
+  return val.slice(0, 4) + '••••••••' + val.slice(-4);
 }
 
 function getProjectRevenue(pid) {
@@ -685,6 +773,7 @@ function renderProject(p) {
       <div class="tab ${activeTab==='features'?'active':''}" onclick="setProjectTab('${p.id}','features')">Features</div>
       <div class="tab ${activeTab==='log'?'active':''}" onclick="setProjectTab('${p.id}','log')">Activity Log (${logs.length})</div>
       <div class="tab ${activeTab==='revenue'?'active':''}" onclick="setProjectTab('${p.id}','revenue')">Revenue (₹${getProjectRevenue(p.id).toLocaleString("en-IN")})</div>
+      <div class="tab ${activeTab==='resources'?'active':''}" onclick="setProjectTab('${p.id}','resources')">Resources (${(S.resources[p.id]||[]).length})</div>
       <div class="tab ${activeTab==='git'?'active':''}" onclick="setProjectTab('${p.id}','git')">Git</div>
     </div>
 
@@ -757,6 +846,11 @@ function renderProject(p) {
         `).join("")}
     </div>
 
+    <!-- RESOURCES TAB -->
+    <div class="tab-panel ${activeTab==='resources'?'active':''}">
+      ${renderResourcesPanel(p.id)}
+    </div>
+
     <!-- GIT TAB -->
     <div class="tab-panel ${activeTab==='git'?'active':''}">
       <div class="git-box" style="margin-bottom:1rem">
@@ -773,6 +867,93 @@ function renderProject(p) {
 
     <div class="footer">All data saved in browser · Run <code>./generate.sh</code> to refresh git data</div>
   `;
+}
+
+function renderResourcesPanel(pid) {
+  const filter = S.resFilter[pid] || '';
+  const searchId = 'resSearch-' + pid;
+  const resources = getProjectResources(pid, filter, '');
+
+  const typeColors = { link: 'var(--accent)', credential: 'var(--red)', 'api-key': 'var(--amber)', config: 'var(--purple)', doc: 'var(--green)' };
+
+  return `
+    <h3 style="font-size:0.875rem;font-weight:600;margin-bottom:0.5rem">Resources</h3>
+    <div style="font-size:0.6875rem;color:var(--text-dim);margin-bottom:0.75rem">Links, credentials, API keys, configs, and notes</div>
+
+    <div class="card" style="margin-bottom:1rem">
+      <div style="font-size:0.75rem;font-weight:600;margin-bottom:0.5rem">Add Resource</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem;margin-bottom:0.4rem">
+        <input type="text" id="resName-${pid}" placeholder="Name (e.g. Railway Dashboard)" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:0.45rem 0.7rem;color:var(--text);font-size:0.8125rem;outline:none">
+        <select id="resType-${pid}" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:0.45rem 0.5rem;color:var(--text);font-size:0.75rem;outline:none">
+          ${RES_TYPES.map(t => '<option value="' + t + '">' + RES_ICONS[t] + ' ' + t.charAt(0).toUpperCase() + t.slice(1).replace('-', ' ') + '</option>').join('')}
+        </select>
+      </div>
+      <input type="text" id="resVal-${pid}" placeholder="Value (URL, key, config, content...)" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:0.45rem 0.7rem;color:var(--text);font-size:0.8125rem;outline:none;margin-bottom:0.4rem;font-family:'SF Mono',Menlo,monospace">
+      <div class="add-row" style="margin-top:0">
+        <input type="text" id="resNotes-${pid}" placeholder="Notes (optional)" onkeydown="if(event.key==='Enter')addResFromProject('${pid}')">
+        <button onclick="addResFromProject('${pid}')">Add</button>
+      </div>
+    </div>
+
+    <div class="res-filter">
+      <button class="res-filter-btn ${filter===''?'active':''}" onclick="setResFilter('${pid}','')">All (${(S.resources[pid]||[]).length})</button>
+      ${RES_TYPES.map(t => {
+        const cnt = (S.resources[pid]||[]).filter(r => r.type === t).length;
+        return cnt > 0 ? '<button class="res-filter-btn ' + (filter===t?'active':'') + '" onclick="setResFilter('+JSON.stringify(pid)+','+JSON.stringify(t)+')">'+RES_ICONS[t]+' '+t.charAt(0).toUpperCase()+t.slice(1).replace('-',' ')+' ('+cnt+')</button>' : '';
+      }).join('')}
+    </div>
+
+    <input type="text" class="res-search" id="${searchId}" placeholder="Search resources..." oninput="renderResourceList('${pid}')">
+
+    <div id="resList-${pid}">
+      ${renderResourceList_html(pid, resources)}
+    </div>
+  `;
+}
+
+function renderResourceList(pid) {
+  const search = document.getElementById('resSearch-' + pid)?.value || '';
+  const filter = S.resFilter[pid] || '';
+  const resources = getProjectResources(pid, filter, search);
+  const el = document.getElementById('resList-' + pid);
+  if (el) el.innerHTML = renderResourceList_html(pid, resources);
+}
+
+function renderResourceList_html(pid, resources) {
+  if (resources.length === 0) return '<div class="empty">No resources yet. Add links, keys, configs above.</div>';
+
+  const typeColors = { link: 'var(--accent)', credential: 'var(--red)', 'api-key': 'var(--amber)', config: 'var(--purple)', doc: 'var(--green)' };
+
+  return resources.map(r => {
+    const sensitive = RES_SENSITIVE[r.type];
+    const revealed = S.resRevealed[r.id];
+    const displayVal = sensitive && !revealed ? maskValue(r.value) : r.value;
+    const isUrl = r.type === 'link' && (r.value.startsWith('http://') || r.value.startsWith('https://'));
+    const jp = JSON.stringify(pid);
+    const jr = JSON.stringify(r.id);
+    const valHtml = isUrl ? '<a href="' + r.value + '" target="_blank">' + r.value + '</a>'
+      : sensitive ? '<span class="res-mask" onclick="toggleReveal('+jr+');event.stopPropagation()" title="' + (revealed ? 'Hide' : 'Click to reveal') + '">' + displayVal + '</span>'
+      : displayVal;
+
+    return '<div class="res-item">' +
+      '<div class="res-icon ' + r.type + '">' + RES_ICONS[r.type] + '</div>' +
+      '<div class="res-body">' +
+        '<div class="res-name">' + r.name + '<span class="res-type-badge" style="color:' + typeColors[r.type] + ';background:' + typeColors[r.type] + '15">' + r.type.replace('-', ' ') + '</span></div>' +
+        '<div class="res-val">' + valHtml + '</div>' +
+        (r.notes ? '<div class="res-note">' + r.notes + '</div>' : '') +
+      '</div>' +
+      '<button class="res-copy" id="copy-' + r.id + '" onclick="copyResource('+jr+','+jp+')">Copy</button>' +
+      '<button class="task-del" onclick="deleteResource('+jp+','+jr+')">&#10005;</button>' +
+    '</div>';
+  }).join('');
+}
+
+function addResFromProject(pid) {
+  const name = document.getElementById('resName-' + pid);
+  const type = document.getElementById('resType-' + pid);
+  const val = document.getElementById('resVal-' + pid);
+  const notes = document.getElementById('resNotes-' + pid);
+  addResource(pid, name.value, type.value, val.value, notes.value);
 }
 
 function addLogFromProject(pid) {
